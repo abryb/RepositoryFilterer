@@ -1,0 +1,35 @@
+{
+  "name": "abryb/repository-filterer",
+  "type": "library",
+  "description": "Doctrine repository filterer",
+  "keywords": [
+    "doctrine2",
+    "filterable",
+  ],
+  "license": "MIT",
+  "authors": [
+    {
+      "name":     "Błażej Rybarkiewicz",
+      "email": "<andrzej.blazej.rybarkiewicz@gmail.com>"
+    }
+  ],
+  "require": {
+    "php":                              ">=7.0",
+    "doctrine/orm":                     ">=2.5"
+  },
+  "require-dev": {
+    "ext-pdo_sqlite":                   "*",
+    "ext-pdo_mysql":                    "*",
+    "ext-pdo_pgsql":                    "*",
+    "doctrine/orm":                     ">=2.5",
+    "phpunit/phpunit":                  ">=6"
+  },
+  "autoload": {
+    "psr-4": { "Abryb\\RepositoryFilter\\": "src/" }
+  },
+  "minimum-stability": "dev",
+  "prefer-stable": true,
+  "config": {
+    "bin-dir": "bin"
+  }
+}
