@@ -16,17 +16,17 @@ use Doctrine\ORM\QueryBuilder;
 
 abstract class RepositoryFiltererAbstract
 {
-    const KEY_JOIN_TYPE = 'join_type';
-    const KEY_JOIN_LIMIT = 'join_limit';
-    const KEY_JOIN_DEPTH = 'join_depth';
-    const KEY_ALIAS = 'alias';
-    const KEY_BLOCKED_FILTERS = 'blocked_filters';
-    const KEY_DEFINED_FILTERS = 'defined_filters';
-    const KEY_DEFAULT_NOT_NULL = 'default_not_null';
-    const KEY_DEFAULT_NOT_LIKE = 'default_not_like';
-    const KEY_STRING_TYPES_ALLOW = 'string_types_allow';
-    const KEY_GLOBAL_STRING_ALLOW_MAX = 'global_string_allow_max';
-    const KEY_GLOBAL_STRING_ALLOW_MIN = 'global_string_allow_min';
+    const JOIN_TYPE = 'join_type';
+    const JOIN_LIMIT = 'join_limit';
+    const JOIN_DEPTH = 'join_depth';
+    const ALIAS = 'alias';
+    const BLOCKED_FILTERS = 'blocked_filters';
+    const DEFINED_FILTERS = 'defined_filters';
+    const DEFAULT_NOT_NULL = 'default_not_null';
+    const DEFAULT_NOT_LIKE = 'default_not_like';
+    const STRING_TYPES_ALLOW = 'string_types_allow';
+    const GLOBAL_STRING_ALLOW_MAX = 'global_string_allow_max';
+    const GLOBAL_STRING_ALLOW_MIN = 'global_string_allow_min';
 
     const VALUE_LEFT_JOIN = 'leftJoin';
     const VALUE_INNER_JOIN = 'innerJoin';
@@ -82,6 +82,16 @@ abstract class RepositoryFiltererAbstract
     const FORMAT_DATE = 'Y-m-d';
 
     /**
+     * @var \ArrayHelperInterface
+     */
+    protected $arrayHelper;
+
+    /**
+     * @var ClassMetadata
+     */
+    protected $classMetadata;
+
+    /**
      * @var EntityManager
      */
     protected $entityManager;
@@ -97,27 +107,22 @@ abstract class RepositoryFiltererAbstract
     protected $settings;
 
     /**
-     * @var ClassMetadata
-     */
-    protected $classMetadata;
-
-    /**
      * THE settings of filterable.
      *
      * @var array
      */
     protected static $defaultSettings = array(
-        self::KEY_JOIN_TYPE => self::VALUE_LEFT_JOIN,
-
-//        self::KEY_JOIN_DEPTH => 2,
-        self::KEY_ALIAS => self::VALUE_DEFAULT_ALIAS,
-        self::KEY_BLOCKED_FILTERS => array(),
-        self::KEY_DEFINED_FILTERS => array(),
-        self::KEY_DEFAULT_NOT_NULL => self::VALUE_NOT_NULL_DEFAULT,
-        self::KEY_DEFAULT_NOT_LIKE => self::VALUE_NOT_LIKE_DEFAULT,
-        self::KEY_GLOBAL_STRING_ALLOW_MIN => self::SEARCH_LIKE_ALLOW_EQUAL_ONLY,
-        self::KEY_GLOBAL_STRING_ALLOW_MAX => self::SEARCH_LIKE_ALLOW_CONTAINING,
-        self::KEY_STRING_TYPES_ALLOW => array(
+        self::JOIN_TYPE => self::VALUE_LEFT_JOIN,
+//        self::JOIN_TYPE => 10,
+//        self::JOIN_DEPTH => 2,
+        self::ALIAS => self::VALUE_DEFAULT_ALIAS,
+        self::BLOCKED_FILTERS => array(),
+        self::DEFINED_FILTERS => array(),
+        self::DEFAULT_NOT_NULL => self::VALUE_NOT_NULL_DEFAULT,
+        self::DEFAULT_NOT_LIKE => self::VALUE_NOT_LIKE_DEFAULT,
+        self::GLOBAL_STRING_ALLOW_MIN => self::SEARCH_LIKE_ALLOW_EQUAL_ONLY,
+        self::GLOBAL_STRING_ALLOW_MAX => self::SEARCH_LIKE_ALLOW_CONTAINING,
+        self::STRING_TYPES_ALLOW => array(
             Type::STRING => self::SEARCH_LIKE_ALLOW_CONTAINING,
             Type::TEXT => self::SEARCH_LIKE_ALLOW_BEGINNING,
             Type::GUID => self::SEARCH_LIKE_ALLOW_EQUAL_ONLY,
@@ -130,12 +135,19 @@ abstract class RepositoryFiltererAbstract
         EntityManager $entityManager,
         EntityRepository $entityRepository,
         ClassMetadata $classMetadata,
-        array $settings = array())
+        array $settings = array(),
+        \ArrayHelperInterface $arrayHelper = null
+    )
+
     {
         $this->entityManager = $entityManager;
         $this->entityRepository = $entityRepository;
         $this->classMetadata = $classMetadata;
         $this->setSettings($settings);
+
+        if (null === $arrayHelper) {
+            $this->arrayHelper = new \ArrayHelper();
+        }
     }
 
     /**
@@ -195,6 +207,6 @@ abstract class RepositoryFiltererAbstract
 
     protected function getDefinedFiltersNames()
     {
-        return array_keys($this->getSetting(self::KEY_DEFINED_FILTERS));
+        return array_keys($this->getSetting(self::DEFINED_FILTERS));
     }
 }

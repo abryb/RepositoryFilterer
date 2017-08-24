@@ -1,16 +1,19 @@
 <?php
-/**
- * Created by PhpStorm.
- * User: bazej
- * Date: 23.08.17
- * Time: 22:55
- */
 
 class ArrayHelper extends AbstractArrayHelper
 {
     public function convertArrayKeys(array $array) : array
     {
-        return array();
+        $result = [];
+        foreach ($array as $k => $v) {
+            if (is_array($v)) {
+                $result
+            }
+            if (array_key_exists($k, $this->keysTranslation)) {
+                $result[$this->keysTranslation[$k]] = $v;
+            }
+        }
+        return $result;
     }
 
     public function convertArrayValues(array $array) : array
@@ -18,20 +21,8 @@ class ArrayHelper extends AbstractArrayHelper
         return array();
     }
 
-    public function isSequentialArray(array $array) : bool
+    protected function arrayRecursiveHelper(array $array)
     {
-        if (!is_array($array)) {
-            return false;
-        }
-        return array_keys($array) === range(0, count($array) - 1);
-    }
-
-
-    public function isAssociationArray(array $array) : bool
-    {
-        if (!(is_array($array) && $array === array())) {
-            return false;
-        }
-        return array_keys($array) !== range(0, count($array) - 1);
+       
     }
 }

@@ -6,7 +6,7 @@ interface ArrayHelperInterface
 
     public function convertArrayValues(array $array) : array;
 
-    public function isSequentialArray(array $array) : bool;
+    public function isSequentialArray($array) : bool;
 
-    public function isAssociationArray(array $array) : bool;
+    public function isAssociationArray($array) : bool;
 }

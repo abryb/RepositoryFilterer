@@ -4,13 +4,13 @@
   "description": "Doctrine repository filterer",
   "keywords": [
     "doctrine2",
-    "filterable",
+    "filterable"
   ],
   "license": "MIT",
   "authors": [
     {
       "name":     "Błażej Rybarkiewicz",
-      "email": "<andrzej.blazej.rybarkiewicz@gmail.com>"
+      "email": "andrzej.blazej.rybarkiewicz@gmail.com"
     }
   ],
   "require": {
