@@ -6,7 +6,7 @@
  * (c) B?a?ej Rybarkiewicz <andrzej.blazej.rybarkiewicz@gmail.com>
  */
 
-namespace Abryb\DoctrineBehaviors\ORM\Filterable;
+namespace Abryb\RepositoryFilterer\Filterer;
 
 use Doctrine\ORM\QueryBuilder;
 

@@ -1,5 +1,7 @@
 <?php
 
+namespace Abryb\RepositoryFilter\ArrayHelper;
+
 abstract class AbstractArrayHelper implements ArrayHelperInterface
 {
     /**
@@ -27,13 +29,41 @@ abstract class AbstractArrayHelper implements ArrayHelperInterface
      * @param array $array
      * @return array
      */
-    abstract public function convertArrayKeys(array $array) : array;
+    public function convertArrayKeys(array $array) : array
+    {
+        $result = [];
+        foreach ($array as $k => $v) {
+            if (is_array($v)) {
+                $v = $this->convertArrayKeys($v);
+            }
+            if (array_key_exists($k, $this->keysTranslation)) {
+                $result[$this->keysTranslation[$k]] = $v;
+            } else {
+                $result[$k] = $v;
+            }
+        }
+        return $result;
+    }
 
     /**
      * @param array $array
      * @return array
      */
-    abstract public function convertArrayValues(array $array) : array;
+    public function convertArrayValues(array $array) : array
+    {
+        $result = [];
+        foreach ($array as $k => $v) {
+            if (is_array($v)) {
+                $v = $this->convertArrayValues($v);
+            }
+            if ((is_string($v) || is_int($v)) && array_key_exists($v, $this->valuesTranslations)) {
+                $result[$k] = $this->valuesTranslations[$v];
+            } else {
+                $result[$k] = $v;
+            }
+        }
+        return $result;
+    }
 
     /**
      * @param $array

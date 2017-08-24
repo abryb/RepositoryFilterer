@@ -6,8 +6,10 @@
  * (c) B?a?ej Rybarkiewicz <andrzej.blazej.rybarkiewicz@gmail.com>
  */
 
-namespace Abryb\DoctrineBehaviors\ORM\Filterable;
+namespace Abryb\RepositoryFilterer\Filterer;
 
+use Abryb\RepositoryFilter\ArrayHelper\ArrayHelper;
+use Abryb\RepositoryFilter\ArrayHelper\ArrayHelperInterface;
 use Doctrine\DBAL\Types\Type;
 use Doctrine\ORM\EntityManager;
 use Doctrine\ORM\EntityRepository;
@@ -16,6 +18,7 @@ use Doctrine\ORM\QueryBuilder;
 
 abstract class RepositoryFiltererAbstract
 {
+    const DISABLE_AUTOFILTERS = 'disable_autofilters';
     const JOIN_TYPE = 'join_type';
     const JOIN_LIMIT = 'join_limit';
     const JOIN_DEPTH = 'join_depth';
@@ -24,6 +27,9 @@ abstract class RepositoryFiltererAbstract
     const DEFINED_FILTERS = 'defined_filters';
     const DEFAULT_NOT_NULL = 'default_not_null';
     const DEFAULT_NOT_LIKE = 'default_not_like';
+    const FILTER_NAMES_TRANSLATIONS = 'fiters_traslations';
+    const FILTER_VALUE_KEYS_TRANSLATIONS = 'filter_keys_traslations';
+    const FILTER_VALUE_VALUES_TRANSLATIONS = 'filter_values_traslations';
     const STRING_TYPES_ALLOW = 'string_types_allow';
     const GLOBAL_STRING_ALLOW_MAX = 'global_string_allow_max';
     const GLOBAL_STRING_ALLOW_MIN = 'global_string_allow_min';
@@ -35,6 +41,7 @@ abstract class RepositoryFiltererAbstract
     const VALUE_DEFINED_FILTERS = array();
     const VALUE_NOT_NULL_DEFAULT = 'not_null';
     const VALUE_NOT_LIKE_DEFAULT = 'not_like';
+    const VALUE_NOT_IN = 'not_in';
 
 //    const SEARCH_LIKE_ALLOW_REGEX      = 4; // TODO
     const SEARCH_LIKE_ALLOW_CONTAINING = 3;
@@ -48,6 +55,8 @@ abstract class RepositoryFiltererAbstract
     const COMPARE_GTE = 'gte';
     const COMPARE_LT = 'lt';
     const COMPARE_LTE = 'lte';
+    const COMPARE_IN = 'in';
+    const COMPARE_NOT_IN = 'notIn';
 
     const TYPE_SMALLINT = Type::SMALLINT;
     const TYPE_BIGINT = Type::BIGINT;
@@ -82,7 +91,7 @@ abstract class RepositoryFiltererAbstract
     const FORMAT_DATE = 'Y-m-d';
 
     /**
-     * @var \ArrayHelperInterface
+     * @var ArrayHelperInterface
      */
     protected $arrayHelper;
 
@@ -112,9 +121,10 @@ abstract class RepositoryFiltererAbstract
      * @var array
      */
     protected static $defaultSettings = array(
+        self::DISABLE_AUTOFILTERS => false,
         self::JOIN_TYPE => self::VALUE_LEFT_JOIN,
-//        self::JOIN_TYPE => 10,
-//        self::JOIN_DEPTH => 2,
+        self::JOIN_TYPE => 10, // TODO
+        self::JOIN_DEPTH => 2, // TODO
         self::ALIAS => self::VALUE_DEFAULT_ALIAS,
         self::BLOCKED_FILTERS => array(),
         self::DEFINED_FILTERS => array(),
@@ -122,6 +132,9 @@ abstract class RepositoryFiltererAbstract
         self::DEFAULT_NOT_LIKE => self::VALUE_NOT_LIKE_DEFAULT,
         self::GLOBAL_STRING_ALLOW_MIN => self::SEARCH_LIKE_ALLOW_EQUAL_ONLY,
         self::GLOBAL_STRING_ALLOW_MAX => self::SEARCH_LIKE_ALLOW_CONTAINING,
+        self::FILTER_NAMES_TRANSLATIONS => [],
+        self::FILTER_VALUE_KEYS_TRANSLATIONS => ['from' => 'gte', 'to' => 'lte'],
+        self::FILTER_VALUE_VALUES_TRANSLATIONS => [],
         self::STRING_TYPES_ALLOW => array(
             Type::STRING => self::SEARCH_LIKE_ALLOW_CONTAINING,
             Type::TEXT => self::SEARCH_LIKE_ALLOW_BEGINNING,
@@ -136,7 +149,7 @@ abstract class RepositoryFiltererAbstract
         EntityRepository $entityRepository,
         ClassMetadata $classMetadata,
         array $settings = array(),
-        \ArrayHelperInterface $arrayHelper = null
+        ArrayHelperInterface $arrayHelper = null
     )
 
     {
@@ -146,8 +159,10 @@ abstract class RepositoryFiltererAbstract
         $this->setSettings($settings);
 
         if (null === $arrayHelper) {
-            $this->arrayHelper = new \ArrayHelper();
+            $this->arrayHelper = new \Abryb\RepositoryFilter\ArrayHelper\ArrayHelper();
         }
+        $this->arrayHelper->setKeysTranslation($this->getSetting(self::FILTER_NAMES_TRANSLATIONS));
+        $this->arrayHelper->setValuesTranslations($this->getSetting(self::FILTER_VALUE_VALUES_TRANSLATIONS));
     }
 
     /**
@@ -205,8 +220,13 @@ abstract class RepositoryFiltererAbstract
         );
     }
 
-    protected function getDefinedFiltersNames()
+    public function getDefinedFiltersNames()
     {
         return array_keys($this->getSetting(self::DEFINED_FILTERS));
+    }
+
+    public function getDefinedFilterValue(string $filterName)
+    {
+        return $this->getSetting(self::DEFINED_FILTERS)[$filterName];
     }
 }

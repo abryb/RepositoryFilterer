@@ -6,7 +6,7 @@
  * (c) B?a?ej Rybarkiewicz <andrzej.blazej.rybarkiewicz@gmail.com>
  */
 
-namespace Abryb\RepositoryFilterer\Filterable;
+namespace Abryb\RepositoryFilterer\Filterer;
 
 use Doctrine\DBAL\Types\Type;
 use Doctrine\ORM\QueryBuilder;
@@ -32,15 +32,21 @@ class RepositoryFilterer extends RepositoryFiltererAbstract
      */
     public function filterBy(array $filters, QueryBuilder $qb = null, $joinedAlias = null): QueryBuilder
     {
-        $alias = $this->getSetting(self::KEY_ALIAS);
+        $alias = $this->getSetting(self::ALIAS);
         $entityName = $this->entityRepository->getClassName();
 
-        // Remove blocked filters
+        // 1. Translate filters
+        $filters = $this->arrayHelper->convertArrayKeys($filters);
+        $filters = $this->arrayHelper->convertArrayValues($filters);
+
+
+        // 2. Remove blocked filters
         $filters = array_filter($filters, function ($f) {
-            return !in_array($f, $this->getSetting(self::KEY_BLOCKED_FILTERS), true);
+            return !in_array($f, $this->getSetting(self::BLOCKED_FILTERS), true);
         }, ARRAY_FILTER_USE_KEY);
 
-        // Check QueryBuilder and alias.
+
+        // 3. Check QueryBuilder and alias and define rootAlias
         if ($qb === null) {
             $qb = $this->entityRepository->createQueryBuilder($alias);
         } else {
@@ -58,22 +64,27 @@ class RepositoryFilterer extends RepositoryFiltererAbstract
             }
         }
 
-        // Iterate through filters, but first apply defined filters
-        $this->applyDefinedFilter($qb);
+        // 4. Iterate through filters
 
-        foreach ($filters as $property => $value) {
-            // If defined filter - continue
-            if (in_array($property, $this->getDefinedFiltersNames(), true)) {
+        foreach ($filters as $filterName => $value) {
+
+            // 5. If filters is defined, run defined function and continue
+            if (array_key_exists($filterName, $this->getDefinedFiltersNames())) {
+                $this->applyDefinedFilter($qb, $filterName, $value, $this->getDefinedFilterValue($filterName));
                 continue;
             }
-            // if value is null, just do it, and continue
+            // 6. If defined filter - continue
+            if (in_array($filterName, $this->getDefinedFiltersNames(), true)) {
+                continue;
+            }
+            // 7. if value is null, just do it, and continue
             if ($value === null) {
-                $this->filterValueIsNull($qb, $property);
+                $this->filterValueIsNull($qb, $filterName);
                 continue;
             }
-            // if value is const VALUE_NOT_NULL, also do it and continue
-            if ($value === $this->getSetting(self::KEY_DEFAULT_NOT_NULL)) {
-                $this->filterValueIsNotNull($qb, $property);
+            // 8. if value is const VALUE_NOT_NULL, also do it and continue
+            if ($value === $this->getSetting(self::DEFAULT_NOT_NULL)) {
+                $this->filterValueIsNotNull($qb, $filterName);
                 continue;
             }
 
@@ -81,24 +92,26 @@ class RepositoryFilterer extends RepositoryFiltererAbstract
              * Important part
              */
 
-            // If entity has property
-            if ($this->classMetadata->hasField($property)) {
-                $this->filterField($qb, $property, $value);
+            // 9. If entity has property
+            if ($this->classMetadata->hasField($filterName)) {
+                $this->filterField($qb, $filterName, $value);
 
-                // If entity has association
-            } elseif ($this->classMetadata->hasAssociation($property)) {
-                $this->filterAssociation($qb, $property, $value);
+            // 10. If entity has association
+            } elseif ($this->classMetadata->hasAssociation($filterName)) {
+                $this->filterAssociation($qb, $filterName, $value);
             }
         }
 
         return $qb;
     }
 
-    protected function applyDefinedFilter(QueryBuilder $qb)
+    protected function applyDefinedFilter(QueryBuilder $qb, $filterName, $value, $callFunctionName)
     {
-        /**
-         * TODO
-         */
+        try {
+            $this->entityRepository->{$callFunctionName}($qb, $filterName, $value);
+        } catch (\Exception $e) {
+            throw new \LogicException(sprintf('Please implement %s(QueryBuilder $qb, $filterName, $value) in %s.',$callFunctionName, get_class($this->entityRepository)));
+        }
     }
 
     protected function filterField(QueryBuilder $qb, $property, $value)
@@ -106,7 +119,6 @@ class RepositoryFilterer extends RepositoryFiltererAbstract
         $aliasProperty = $this->getAliasedProperty($property);
 
         switch ($this->getFieldMappingType($property)) {
-            // group numbers
             case self::TYPE_SMALLINT:
             case self::TYPE_BIGINT:
             case self::TYPE_INTEGER:
@@ -168,9 +180,10 @@ class RepositoryFilterer extends RepositoryFiltererAbstract
     protected function filterAssociation(QueryBuilder $qb, $association, $value)
     {
         $aliasAssociation = $this->getAliasedProperty($association);
-
         $associatedClass = $this->classMetadata->getAssociationTargetClass($association);
-        if ($association instanceof $associatedClass) {
+
+        // If value instance of associated Class try to call getter
+        if ($value instanceof $associatedClass) {
             $field = $this->classMetadata->getSingleAssociationReferencedJoinColumnName($association);
             try {
                 $qb->andWhere($qb->expr()->eq(
@@ -178,70 +191,57 @@ class RepositoryFilterer extends RepositoryFiltererAbstract
                     $qb->expr()->literal($value->{'get'.$field}())
                 ));
             } catch (\Exception $e) {
-
+                throw new \LogicException(sprintf('To filter %s by related %s entity it has to implement public method get%s', $this->classMetadata->getName(), $associatedClass, ucfirst($field)));
             }
-        }
-        // If $value is not array do '='
-        if (!is_array($value)) {
+        // Else if not array take literal value
+        } elseif (!is_array($value)) {
             $qb->andWhere($qb->expr()->eq(
                 $aliasAssociation,
                 $qb->expr()->literal($value)
             ));
-            /**
-             * TRY getId or something
-             */
-            // Else if value is Sequential array do 'in'
-        } elseif ($this->isSequentialArray($value)) {
+        // Else if sequential array,
+        } elseif ($this->arrayHelper->isSequentialArray($value)) {
             $qb->andWhere($qb->expr()->in(
                 $aliasAssociation,
                 $qb->expr()->literal($value)
             ));
-            return;
+        // Else try calling associatedRepository findBy method
+        } else {
+
+            // TODO check joins limit
+            // TODO check join depth limit
+            // getRepository of associacion
+            $associationMappings = $this->classMetadata->getAssociationMapping($association);
+            $associatedRepository = $this->entityManager->getRepository($associationMappings['targetEntity']);
+
+            // Check if associated repository is filterable.
+            if ($associatedRepository instanceof RepositoryFilterableInterface) {
+                // Join association
+                $joinedAlias = $this->rootAlias.'_'.$association;
+                $joinedType = $this->getSetting(self::JOIN_TYPE);
+
+                $qb->$joinedType($aliasAssociation, $joinedAlias);
+
+                // Run filterBy method of associated repository
+                $associatedRepository->filterBy($value, $qb, $joinedAlias);
+            }
         }
-
-        // Check JOIN_LIMIT
-        if (count($qb->getDQLParts()['join'][$this->rootAlias]) >= $this->getSetting(self::KEY_JOIN_LIMIT)) {
-            return;
-        }
-
-        // getRepository of associacion
-        $associationMappings = $this->classMetadata->getAssociationMapping($association);
-        $associatedRepository = $this->entityManager->getRepository($associationMappings['targetEntity']);
-
-        // Check if associated repository is filterable.
-        if ($associatedRepository instanceof RepositoryFilterableInterface) {
-            // Join association
-            $joinedAlias = $this->rootAlias.'_'.$association;
-            $joinedType = $this->getSetting(self::KEY_JOIN_TYPE);
-
-            $qb->$joinedType($aliasAssociation, $joinedAlias);
-
-            // Run filterBy method of associated repository
-            $associatedRepository->filterBy($value, $qb, $joinedAlias);
-        }
-
     }
 
     protected function filterNumber(QueryBuilder $qb, $property, $value)
     {
         if (!is_array($value)) {
-            $qb->andWhere($qb->expr()->eq(
-                $property,
-                $qb->expr()->literal($value)
-            ));
-            return;
-        }
-        if ($this->isSequentialArray($value)) {
+            // If not array, take literal value
+            $qb->andWhere($qb->expr()->eq($property,$qb->expr()->literal($value)));
+        } elseif ($this->arrayHelper->isSequentialArray($value)) {
+            // Else If sequential array take array values
             $qb->andWhere($qb->expr()->in($property, array_values($value)));
-
-            return;
-        }
-        foreach ($this->getCompareTypes() as $cpt) {
-            if (array_key_exists($cpt, $value)) {
-                $qb->andWhere($qb->expr()->$cpt(
-                    $property,
-                    $qb->expr()->literal($value[$cpt])
-                ));
+        } else {
+            // Else it is assoc array
+            foreach ($this->getCompareTypes() as $cpt) {
+                if (array_key_exists($cpt, $value)) {
+                    $qb->andWhere($qb->expr()->$cpt($property,$qb->expr()->literal($value[$cpt])));
+                }
             }
         }
     }
@@ -249,12 +249,12 @@ class RepositoryFilterer extends RepositoryFiltererAbstract
     protected function filterString(QueryBuilder $qb, $property, $needle, $type = self::TYPE_STRING)
     {
         $like = 'like';
-        $not_like = $this->getSetting(self::KEY_DEFAULT_NOT_LIKE);
+        $not_like = $this->getSetting(self::DEFAULT_NOT_LIKE);
 
         // if string  - check if it begins with 'not_like' value, change for not_like mode and remove 'not_like' from beginning
         if (is_string($needle)) {
             $isNotLike = substr($needle, 0, count($not_like));
-            if ($isNotLike === self::KEY_DEFAULT_NOT_LIKE) {
+            if ($isNotLike === self::DEFAULT_NOT_LIKE) {
                 $like = 'notLike';
                 if (0 === strpos($needle, $isNotLike)) {
                     $needle = substr($needle, strlen($isNotLike));
@@ -264,7 +264,7 @@ class RepositoryFilterer extends RepositoryFiltererAbstract
         // If array - search for 'not_like' key, if exists change 'like' for 'not_like' and remove array keys.
         if (is_array($needle) && array_key_exists($not_like, $needle)) {
             $like = 'notLike';
-            $needle = $needle[self::KEY_DEFAULT_NOT_LIKE];
+            $needle = $needle[self::DEFAULT_NOT_LIKE];
         }
 
         // Validate type of search
@@ -291,15 +291,6 @@ class RepositoryFilterer extends RepositoryFiltererAbstract
 
     protected function filterDateTime(QueryBuilder $qb, $property, $value, $withTime)
     {
-        if (isset($value['from'])) {
-            $value['gte'] = $value['from'];
-            unset($value['from']);
-        }
-        if (isset($value['to'])) {
-            $value['lte'] = $value['to'];
-            unset($value['to']);
-        }
-
         if (is_array($value)) {
             foreach ($this->getCompareTypes() as $compareType) {
                 if (isset($value[$compareType]) && is_string($value[$compareType])) {
@@ -476,27 +467,12 @@ class RepositoryFilterer extends RepositoryFiltererAbstract
         return $this->classMetadata->getFieldMapping($property)['type'];
     }
 
-    protected function isAssociationArray($array)
-    {
-        if (!(is_array($array) && $array === array())) {
-            return false;
-        }
-        return array_keys($array) !== range(0, count($array) - 1);
-    }
-
-    protected function isSequentialArray($array)
-    {
-        if (!is_array($array)) {
-            return false;
-        }
-        return array_keys($array) === range(0, count($array) - 1);
-    }
 
     protected function validateSearchLikeType($type)
     {
-        $search_allow_min = $this->getSetting(self::KEY_GLOBAL_STRING_ALLOW_MIN);
-        $search_allow_max = $this->getSetting(self::KEY_GLOBAL_STRING_ALLOW_MAX);
-        $search_allow_this_type = $this->getSetting(self::KEY_STRING_TYPES_ALLOW)[$type];
+        $search_allow_min = $this->getSetting(self::GLOBAL_STRING_ALLOW_MIN);
+        $search_allow_max = $this->getSetting(self::GLOBAL_STRING_ALLOW_MAX);
+        $search_allow_this_type = $this->getSetting(self::STRING_TYPES_ALLOW)[$type];
         return max($search_allow_min, min($search_allow_this_type, $search_allow_max));
     }
 

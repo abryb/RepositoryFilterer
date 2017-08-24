@@ -1,5 +1,7 @@
 <?php
 
+namespace Abryb\RepositoryFilter\ArrayHelper;
+
 interface ArrayHelperInterface
 {
     public function convertArrayKeys(array $array) : array;
